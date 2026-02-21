@@ -293,14 +293,8 @@ class ZikrCounter {
         // ЗДЕСЬ ВСТАВЬТЕ СВОИ ССЫЛКИ НА НАШИДЫ
         const nasheeds = {
             'nasheed1': 'assets/audio/1',
-            'nasheed2': '2',
+            'nasheed2': '9',
             'nasheed3': '3'
-            'nasheed1': '4',
-            'nasheed2': '5',
-            'nasheed3': '6'
-            'nasheed1': '7',
-            'nasheed2': '8',
-            'nasheed3': '9'
         };
         
         if (nasheeds[value]) {
@@ -427,4 +421,5 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
 
