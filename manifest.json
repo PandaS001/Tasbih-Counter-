@@ -1,0 +1,16 @@
+{
+    "name": "Исламский счетчик зикра",
+    "short_name": "Зикр счетчик",
+    "description": "Красивый неоновый счетчик для зикра и таспиха",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#00ffff",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Ccircle cx='96' cy='96' r='86' fill='%230a0a2a' stroke='%2300ffff' stroke-width='5'/%3E%3Ctext x='96' y='130' font-size='90' text-anchor='middle' fill='%2300ffff' font-family='Arial'%3E🕋%3C/text%3E%3C/svg%3E",
+            "sizes": "192x192",
+            "type": "image/svg+xml"
+        }
+    ]
+}
