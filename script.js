@@ -292,9 +292,9 @@ class ZikrCounter {
         
         // ЗДЕСЬ ВСТАВЬТЕ СВОИ ССЫЛКИ НА НАШИДЫ
         const nasheeds = {
-            'nasheed1': 'assets/audio/1',
-            'nasheed2': '9',
-            'nasheed3': '3'
+            'nasheed1': 'assets/audio/islamic_music.mp3',
+            'nasheed2': 'assets/audio/islamic_music.mp3',
+            'nasheed3': 'assets/audio/islamic_music.mp3'
         };
         
         if (nasheeds[value]) {
@@ -421,5 +421,6 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
 
 
