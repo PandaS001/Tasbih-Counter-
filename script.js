@@ -1,232 +1,221 @@
-const CONFIG = {
-    musicEnabled: true,
-    defaultPreset: 33,
-    storageKey: 'islamicCounter',
-    historyKey: 'counterHistory'
-};
-
-class IslamicCounter {
+class ZikrCounter {
     constructor() {
         this.count = 0;
         this.max = 33;
         this.currentZikr = 'Субханаллах';
         this.history = [];
-        this.musicPlaying = false;
-        this.audio = document.getElementById('bgMusic');
-        this.selectedHistoryItems = new Set();
-        
-        // Голосовые свойства
-        this.recognition = null;
+        this.selectedItems = new Set();
         this.isListening = false;
-        this.speechSupported = false;
+        this.recognition = null;
+        this.audio = document.getElementById('audioPlayer');
+        this.lastTap = 0;
         
         this.init();
     }
     
     init() {
-        this.loadFromStorage();
+        this.loadData();
         this.setupEventListeners();
-        this.setupTheme();
-        this.updateDisplay();
-        this.renderHistory();
-        this.initVoiceRecognition();
         
         setTimeout(() => {
-            document.querySelector('.splash-screen').style.display = 'none';
-            document.querySelector('.main-page').style.display = 'block';
-        }, 2000);
-    }
-    
-    initVoiceRecognition() {
-        // Проверяем поддержку Web Speech API
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            this.recognition = new SpeechRecognition();
-            this.recognition.continuous = true;
-            this.recognition.interimResults = false;
-            this.recognition.lang = 'ru-RU';
-            
-            this.recognition.onstart = () => {
-                this.isListening = true;
-                this.updateVoiceUI(true);
-                this.showNotification('Голосовой счет активирован', '#00ff9d');
-            };
-            
-            this.recognition.onend = () => {
-                if (this.isListening) {
-                    // Автоматически перезапускаем, если все еще должно слушать
-                    this.recognition.start();
-                } else {
-                    this.updateVoiceUI(false);
-                }
-            };
-            
-            this.recognition.onerror = (event) => {
-                console.error('Voice recognition error:', event.error);
-                if (event.error === 'not-allowed') {
-                    this.showNotification('Доступ к микрофону запрещен', '#ff4d4d');
-                    this.isListening = false;
-                    this.updateVoiceUI(false);
-                } else if (event.error === 'no-speech') {
-                    // Игнорируем ошибку отсутствия речи
-                } else {
-                    this.showNotification(`Ошибка: ${event.error}`, '#ff4d4d');
-                }
-            };
-            
-            this.recognition.onresult = (event) => {
-                const lastResult = event.results[event.results.length - 1];
-                if (lastResult.isFinal) {
-                    const transcript = lastResult[0].transcript.trim().toLowerCase();
-                    this.processVoiceCommand(transcript);
-                }
-            };
-            
-            this.speechSupported = true;
-            document.getElementById('voice-status').textContent = 'Микрофон доступен';
-        } else {
-            this.speechSupported = false;
-            document.getElementById('voice-btn').disabled = true;
-            document.getElementById('voice-btn').style.opacity = '0.5';
-            document.getElementById('voice-status').textContent = 'Голосовое управление не поддерживается';
-        }
-    }
-    
-    processVoiceCommand(transcript) {
-        console.log('Распознано:', transcript);
+            document.getElementById('splash').style.display = 'none';
+            document.getElementById('mainPage').style.display = 'block';
+        }, 1800);
         
-        // Нормализуем текст (убираем знаки препинания, лишние пробелы)
-        const normalized = transcript.toLowerCase()
-            .replace(/[.,!?;:]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-        
-        // Проверяем, содержит ли распознанный текст текущий зикр
-        const currentZikrLower = this.currentZikr.toLowerCase();
-        
-        if (normalized.includes(currentZikrLower)) {
-            // Нашли зикр - увеличиваем счет
-            this.increment();
-            
-            // Показываем, что распознали
-            this.showNotification(`✓ ${this.currentZikr}`, '#00ff9d');
-        } else {
-            // Проверяем команды
-            if (normalized.includes('сброс') || normalized.includes('обнули')) {
-                this.reset();
-                this.showNotification('Сброс по голосу', '#ff9900');
-            } else if (normalized.includes('сохранить')) {
-                this.saveToHistory();
-                this.showNotification('Сохранено по голосу', '#00ffff');
-            } else if (normalized.includes('минус') || normalized.includes('убрать')) {
-                this.decrement();
-                this.showNotification('-1 по голосу', '#ff4d4d');
-            } else if (normalized.includes('лимит 33')) {
-                this.max = 33;
-                this.reset();
-                this.showNotification('Лимит 33', '#00ffff');
-            } else if (normalized.includes('лимит 66')) {
-                this.max = 66;
-                this.reset();
-                this.showNotification('Лимит 66', '#00ffff');
-            } else if (normalized.includes('лимит 99')) {
-                this.max = 99;
-                this.reset();
-                this.showNotification('Лимит 99', '#00ffff');
-            } else if (normalized.includes('лимит 100')) {
-                this.max = 100;
-                this.reset();
-                this.showNotification('Лимит 100', '#00ffff');
-            } else if (normalized.includes('лимит 1000')) {
-                this.max = 1000;
-                this.reset();
-                this.showNotification('Лимит 1000', '#00ffff');
-            }
-        }
-    }
-    
-    toggleVoiceRecognition() {
-        if (!this.speechSupported) {
-            this.showNotification('Голосовое управление не поддерживается', '#ff4d4d');
-            return;
-        }
-        
-        if (this.isListening) {
-            this.recognition.stop();
-            this.isListening = false;
-            this.updateVoiceUI(false);
-            this.showNotification('Голосовой счет выключен', '#ff4d4d');
-        } else {
-            // Запрашиваем разрешение на микрофон
-            try {
-                this.recognition.start();
-            } catch (error) {
-                console.error('Failed to start recognition:', error);
-                this.showNotification('Ошибка запуска микрофона', '#ff4d4d');
-            }
-        }
-    }
-    
-    updateVoiceUI(isActive) {
-        const voiceBtn = document.getElementById('voice-btn');
-        const voiceIcon = document.getElementById('voice-icon');
-        const voiceStatus = document.getElementById('voice-status');
-        
-        if (isActive) {
-            voiceBtn.classList.add('active');
-            voiceIcon.textContent = '🎤✨';
-            voiceStatus.textContent = 'Слушаю... Говорите зикры';
-            voiceStatus.classList.add('active');
-        } else {
-            voiceBtn.classList.remove('active');
-            voiceIcon.textContent = '🎤';
-            voiceStatus.textContent = 'Микрофон выключен';
-            voiceStatus.classList.remove('active');
-        }
+        this.updateDisplay();
     }
     
     setupEventListeners() {
-        document.getElementById('increment-btn').addEventListener('click', () => this.increment());
-        document.getElementById('decrement-btn').addEventListener('click', () => this.decrement());
-        document.getElementById('reset-btn').addEventListener('click', () => this.reset());
-        document.getElementById('voice-btn').addEventListener('click', () => this.toggleVoiceRecognition());
+        // Бургер меню
+        document.getElementById('burger-menu').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('side-menu').classList.add('open');
+        });
         
-        document.querySelectorAll('.preset-btn').forEach(btn => {
+        document.getElementById('close-menu').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('side-menu').classList.remove('open');
+        });
+        
+        // Кнопки счета
+        document.getElementById('plusBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.increment();
+        });
+        
+        document.getElementById('minusBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.decrement();
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.reset();
+        });
+        
+        // Голос
+        document.getElementById('voiceBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleVoice();
+        });
+        
+        // Тема
+        document.getElementById('theme-dark').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setTheme('dark');
+        });
+        
+        document.getElementById('theme-light').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setTheme('light');
+        });
+        
+        // Зикр
+        document.getElementById('custom-zikr').addEventListener('input', (e) => {
+            e.stopPropagation();
+            if (e.target.value.trim()) {
+                this.currentZikr = e.target.value.trim();
+                document.getElementById('zikrDisplay').textContent = this.currentZikr;
+            }
+        });
+        
+        // Пресеты лимита
+        document.querySelectorAll('.menu-preset-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                this.max = parseInt(e.target.dataset.preset);
-                this.reset();
-                this.showNotification(`Лимит установлен: ${this.max}`, '#00ffff');
+                e.stopPropagation();
+                this.max = parseInt(btn.dataset.limit);
+                document.getElementById('limitDisplay').textContent = `/${this.max}`;
+                this.updateProgress();
             });
         });
         
-        document.getElementById('zikr-select').addEventListener('change', (e) => {
-            this.currentZikr = e.target.value;
-            document.getElementById('counter-name-display').textContent = this.currentZikr;
-            this.showNotification(`Зикр: ${this.currentZikr}`, '#00ffff');
+        // История
+        document.getElementById('show-history').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('side-menu').classList.remove('open');
+            document.getElementById('historyModal').classList.add('show');
+            this.renderHistory();
         });
         
-        document.getElementById('save-btn').addEventListener('click', () => this.saveToHistory());
-        document.getElementById('load-btn').addEventListener('click', () => this.loadFromHistory());
+        document.getElementById('closeHistory').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('historyModal').classList.remove('show');
+        });
         
-        document.getElementById('select-all-btn').addEventListener('click', () => this.toggleSelectAll());
-        document.getElementById('delete-selected-btn').addEventListener('click', () => this.deleteSelected());
-        document.getElementById('clear-history').addEventListener('click', () => this.clearHistory());
+        document.getElementById('saveCurrent').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.saveCurrent();
+        });
         
-        document.getElementById('theme-dark').addEventListener('click', () => this.setTheme('dark'));
-        document.getElementById('theme-light').addEventListener('click', () => this.setTheme('light'));
+        document.getElementById('deleteSelected').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteSelected();
+        });
         
-        document.getElementById('music-control').addEventListener('click', () => this.toggleMusic());
+        document.getElementById('clearAll').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.clearAll();
+        });
         
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(console.error);
-        }
+        // Нашиды
+        document.getElementById('nasheed-select').addEventListener('change', (e) => {
+            e.stopPropagation();
+            this.changeNasheed(e.target.value);
+        });
         
-        setInterval(() => this.saveToStorage(), 30000);
+        document.getElementById('volume-slider').addEventListener('input', (e) => {
+            e.stopPropagation();
+            this.audio.volume = parseFloat(e.target.value);
+        });
+        
+        // ========== ГЛАВНОЕ: НАЖАТИЕ НА ЛЮБУЮ ОБЛАСТЬ ==========
+        document.addEventListener('click', (e) => {
+            // Проверяем, что клик не по меню и не по кнопкам
+            const isMenu = e.target.closest('.side-menu');
+            const isModal = e.target.closest('.modal-content');
+            const isBurger = e.target.closest('.burger-menu');
+            const isButton = e.target.closest('button');
+            const isInput = e.target.closest('input');
+            const isSelect = e.target.closest('select');
+            
+            // Если клик не по интерактивным элементам - считаем как плюс
+            if (!isMenu && !isModal && !isBurger && !isButton && !isInput && !isSelect) {
+                // Защита от двойного нажатия
+                const now = Date.now();
+                if (now - this.lastTap > 300) { // Минимальный интервал 300мс
+                    this.increment();
+                    this.lastTap = now;
+                }
+            }
+        });
+        
+        // Отключаем всплытие для модального окна
+        document.querySelector('.modal-content')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        
+        // Отключаем всплытие для меню
+        document.querySelector('.side-menu')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
     }
     
-    setupTheme() {
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        this.setTheme(savedTheme);
+    increment() {
+        if (this.count < this.max) {
+            this.count++;
+            this.updateDisplay();
+            this.saveData();
+            this.showFeedback('+1');
+        }
+    }
+    
+    decrement() {
+        if (this.count > 0) {
+            this.count--;
+            this.updateDisplay();
+            this.saveData();
+            this.showFeedback('-1');
+        }
+    }
+    
+    reset() {
+        this.count = 0;
+        this.updateDisplay();
+        this.saveData();
+        this.showFeedback('↺ Сброс');
+    }
+    
+    showFeedback(text) {
+        // Визуальная обратная связь
+        const feedback = document.createElement('div');
+        feedback.textContent = text;
+        feedback.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: var(--primary);
+            text-shadow: var(--glow);
+            z-index: 1000;
+            pointer-events: none;
+            animation: fadeOut 0.3s ease-out;
+        `;
+        document.body.appendChild(feedback);
+        
+        setTimeout(() => feedback.remove(), 300);
+    }
+    
+    updateDisplay() {
+        document.getElementById('countDisplay').textContent = this.count;
+        document.getElementById('limitDisplay').textContent = `/${this.max}`;
+        document.getElementById('zikrDisplay').textContent = this.currentZikr;
+        this.updateProgress();
+    }
+    
+    updateProgress() {
+        const percent = (this.count / this.max) * 100;
+        document.getElementById('progressFill').style.width = percent + '%';
     }
     
     setTheme(theme) {
@@ -237,101 +226,129 @@ class IslamicCounter {
         document.getElementById('theme-light').classList.toggle('active', theme === 'light');
     }
     
-    increment() {
-        if (this.count < this.max) {
-            this.count++;
-            this.updateDisplay();
-            
-            if (this.count === this.max) {
-                this.showNotification('Лимит достигнут!', '#ff9900');
+    // Голосовое распознавание
+    toggleVoice() {
+        if (!this.recognition) {
+            this.initVoice();
+        }
+        
+        if (this.isListening) {
+            this.recognition.stop();
+            this.isListening = false;
+            document.getElementById('voiceBtn').classList.remove('active');
+            document.getElementById('voiceStatus').textContent = '🎤 Выкл';
+        } else {
+            try {
+                this.recognition.start();
+            } catch (e) {
+                console.log('Voice error');
             }
         }
     }
     
-    decrement() {
-        if (this.count > 0) {
-            this.count--;
-            this.updateDisplay();
+    initVoice() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            document.getElementById('voiceStatus').textContent = '❌ Не поддерживается';
+            return;
+        }
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.lang = 'ru-RU';
+        
+        this.recognition.onstart = () => {
+            this.isListening = true;
+            document.getElementById('voiceBtn').classList.add('active');
+            document.getElementById('voiceStatus').textContent = '🎤 Слушаю...';
+        };
+        
+        this.recognition.onend = () => {
+            if (this.isListening) {
+                this.recognition.start();
+            }
+        };
+        
+        this.recognition.onresult = (event) => {
+            const last = event.results[event.results.length - 1];
+            const text = last[0].transcript.toLowerCase();
+            
+            if (text.includes(this.currentZikr.toLowerCase())) {
+                this.increment();
+            } else if (text.includes('сброс')) {
+                this.reset();
+            } else if (text.includes('минус')) {
+                this.decrement();
+            }
+        };
+    }
+    
+    // Нашиды
+    changeNasheed(value) {
+        if (value === 'none') {
+            this.audio.pause();
+            return;
+        }
+        
+        // ЗДЕСЬ ВСТАВЬТЕ СВОИ ССЫЛКИ НА НАШИДЫ
+        const nasheeds = {
+            'nasheed1': 'https://www.example.com/nasheed1.mp3',
+            'nasheed2': 'https://www.example.com/nasheed2.mp3',
+            'nasheed3': 'https://www.example.com/nasheed3.mp3'
+        };
+        
+        if (nasheeds[value]) {
+            this.audio.src = nasheeds[value];
+            this.audio.play().catch(() => {});
         }
     }
     
-    reset() {
-        this.count = 0;
-        this.updateDisplay();
-    }
-    
-    updateDisplay() {
-        document.getElementById('counter-value').textContent = this.count;
-        document.getElementById('counter-max').textContent = `/${this.max}`;
-        
-        const percentage = (this.count / this.max) * 100;
-        document.getElementById('progress-fill').style.width = `${percentage}%`;
-    }
-    
-    saveToStorage() {
+    // Сохранение данных
+    saveData() {
         const data = {
             count: this.count,
             max: this.max,
-            zikr: this.currentZikr,
-            timestamp: Date.now()
+            zikr: this.currentZikr
         };
-        localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
+        localStorage.setItem('zikrData', JSON.stringify(data));
     }
     
-    loadFromStorage() {
-        const saved = localStorage.getItem(CONFIG.storageKey);
+    loadData() {
+        const saved = localStorage.getItem('zikrData');
         if (saved) {
             try {
                 const data = JSON.parse(saved);
                 this.count = data.count || 0;
                 this.max = data.max || 33;
                 this.currentZikr = data.zikr || 'Субханаллах';
-                
-                document.getElementById('zikr-select').value = this.currentZikr;
-                document.getElementById('counter-name-display').textContent = this.currentZikr;
-            } catch (e) {
-                console.error('Error loading from storage');
-            }
+            } catch (e) {}
         }
+        
+        const theme = localStorage.getItem('theme') || 'dark';
+        this.setTheme(theme);
     }
     
-    saveToHistory() {
+    // История
+    saveCurrent() {
         const history = this.getHistory();
         
-        const record = {
+        history.unshift({
             id: Date.now(),
             zikr: this.currentZikr,
             count: this.count,
             max: this.max,
             date: new Date().toLocaleString()
-        };
+        });
         
-        history.unshift(record);
-        if (history.length > 50) history.pop();
+        if (history.length > 30) history.pop();
         
-        localStorage.setItem(CONFIG.historyKey, JSON.stringify(history));
+        localStorage.setItem('zikrHistory', JSON.stringify(history));
         this.renderHistory();
-        this.showNotification('Сохранено в историю', '#00ff9d');
-    }
-    
-    loadFromHistory() {
-        const history = this.getHistory();
-        if (history.length > 0) {
-            const lastRecord = history[0];
-            this.count = lastRecord.count;
-            this.max = lastRecord.max;
-            this.currentZikr = lastRecord.zikr;
-            
-            document.getElementById('zikr-select').value = this.currentZikr;
-            document.getElementById('counter-name-display').textContent = this.currentZikr;
-            this.updateDisplay();
-            this.showNotification('Загружено последнее сохранение', '#00ffff');
-        }
     }
     
     getHistory() {
         try {
-            return JSON.parse(localStorage.getItem(CONFIG.historyKey)) || [];
+            return JSON.parse(localStorage.getItem('zikrHistory')) || [];
         } catch {
             return [];
         }
@@ -339,136 +356,68 @@ class IslamicCounter {
     
     renderHistory() {
         const history = this.getHistory();
-        const container = document.getElementById('history-list');
+        const container = document.getElementById('historyList');
         
         if (history.length === 0) {
-            container.innerHTML = '<p class="history-empty">Нет сохраненных записей</p>';
+            container.innerHTML = '<p class="history-empty">Нет сохранений</p>';
             return;
         }
         
-        container.innerHTML = history.map(record => {
-            const isSelected = this.selectedHistoryItems.has(record.id);
-            return `
-                <div class="history-item" data-id="${record.id}">
-                    <input type="checkbox" class="history-checkbox" ${isSelected ? 'checked' : ''}>
-                    <div class="history-content">
-                        <div class="history-item-header">
-                            <span class="history-zikr">${record.zikr}</span>
-                            <span class="history-value">${record.count}/${record.max}</span>
-                        </div>
-                        <div class="history-date">${record.date}</div>
+        container.innerHTML = history.map(item => `
+            <div class="history-item" data-id="${item.id}">
+                <input type="checkbox" class="history-checkbox" ${this.selectedItems.has(item.id) ? 'checked' : ''}>
+                <div class="history-item-content">
+                    <div class="history-item-header">
+                        <span class="history-zikr">${item.zikr.substring(0, 15)}</span>
+                        <span class="history-value">${item.count}/${item.max}</span>
                     </div>
+                    <div class="history-date">${item.date}</div>
                 </div>
-            `;
-        }).join('');
+            </div>
+        `).join('');
         
-        container.querySelectorAll('.history-checkbox').forEach((checkbox, index) => {
-            const item = checkbox.closest('.history-item');
-            const recordId = parseInt(item.dataset.id);
-            
-            checkbox.addEventListener('change', (e) => {
+        document.querySelectorAll('.history-checkbox').forEach(cb => {
+            cb.addEventListener('click', (e) => e.stopPropagation());
+            cb.addEventListener('change', (e) => {
+                const id = parseInt(e.target.closest('.history-item').dataset.id);
                 if (e.target.checked) {
-                    this.selectedHistoryItems.add(recordId);
+                    this.selectedItems.add(id);
                 } else {
-                    this.selectedHistoryItems.delete(recordId);
+                    this.selectedItems.delete(id);
                 }
-            });
-            
-            item.querySelector('.history-content').addEventListener('click', () => {
-                this.loadSpecificHistory(recordId);
             });
         });
     }
     
-    loadSpecificHistory(id) {
-        const history = this.getHistory();
-        const record = history.find(r => r.id === id);
-        
-        if (record) {
-            this.count = record.count;
-            this.max = record.max;
-            this.currentZikr = record.zikr;
-            
-            document.getElementById('zikr-select').value = this.currentZikr;
-            document.getElementById('counter-name-display').textContent = this.currentZikr;
-            this.updateDisplay();
-            this.showNotification('Запись загружена', '#00ffff');
-        }
-    }
-    
-    toggleSelectAll() {
-        const history = this.getHistory();
-        const checkboxes = document.querySelectorAll('.history-checkbox');
-        
-        if (this.selectedHistoryItems.size === history.length) {
-            this.selectedHistoryItems.clear();
-            checkboxes.forEach(cb => cb.checked = false);
-            this.showNotification('Все записи отменены', '#ff9900');
-        } else {
-            history.forEach(record => this.selectedHistoryItems.add(record.id));
-            checkboxes.forEach(cb => cb.checked = true);
-            this.showNotification(`Выбрано ${history.length} записей`, '#00ffff');
-        }
-    }
-    
     deleteSelected() {
-        if (this.selectedHistoryItems.size === 0) {
-            this.showNotification('Нет выбранных записей', '#ff4d4d');
-            return;
-        }
+        if (this.selectedItems.size === 0) return;
         
-        if (confirm(`Удалить ${this.selectedHistoryItems.size} выбранных записей?`)) {
-            const history = this.getHistory();
-            const filteredHistory = history.filter(record => !this.selectedHistoryItems.has(record.id));
-            
-            localStorage.setItem(CONFIG.historyKey, JSON.stringify(filteredHistory));
-            this.selectedHistoryItems.clear();
+        const history = this.getHistory();
+        const filtered = history.filter(item => !this.selectedItems.has(item.id));
+        
+        localStorage.setItem('zikrHistory', JSON.stringify(filtered));
+        this.selectedItems.clear();
+        this.renderHistory();
+    }
+    
+    clearAll() {
+        if (confirm('Очистить всю историю?')) {
+            localStorage.removeItem('zikrHistory');
+            this.selectedItems.clear();
             this.renderHistory();
-            this.showNotification(`Удалено ${history.length - filteredHistory.length} записей`, '#ff4d4d');
         }
-    }
-    
-    clearHistory() {
-        if (confirm('Очистить всю историю сохранений?')) {
-            localStorage.removeItem(CONFIG.historyKey);
-            this.selectedHistoryItems.clear();
-            this.renderHistory();
-            this.showNotification('История очищена', '#ff4d4d');
-        }
-    }
-    
-    toggleMusic() {
-        if (!this.audio) return;
-        
-        if (this.musicPlaying) {
-            this.audio.pause();
-            document.querySelector('.music-icon').textContent = '🎵';
-            this.showNotification('Музыка выключена', '#ff4d4d');
-        } else {
-            this.audio.play().catch(() => {
-                this.showNotification('Нажмите на страницу для музыки', '#ff9900');
-            });
-            document.querySelector('.music-icon').textContent = '🔊';
-            this.showNotification('Музыка включена', '#00ff9d');
-        }
-        
-        this.musicPlaying = !this.musicPlaying;
-    }
-    
-    showNotification(message, color) {
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = message;
-        notification.style.borderColor = color;
-        notification.style.color = color;
-        notification.style.boxShadow = `0 0 20px ${color}`;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 2000);
     }
 }
 
-const counter = new IslamicCounter();
+// Запуск
+new ZikrCounter();
+
+// Добавляем стили для анимации
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeOut {
+        0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
+    }
+`;
+document.head.appendChild(style);
